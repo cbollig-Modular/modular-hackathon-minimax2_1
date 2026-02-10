@@ -179,15 +179,18 @@ class MiniMaxM2Config(ArchConfigWithKVCache):
             Initialized MiniMaxM2Config instance.
         """
         # Extract device and dtype configuration
-        devices = [DeviceRef(d) for d in pipeline_config.model.execution_devices]
-        dtype = DType[pipeline_config.dtype]
+        devices = [
+            DeviceRef(spec.device_type, spec.id)
+            for spec in pipeline_config.model.device_specs
+        ]
+
+        quantization_encoding = pipeline_config.model.quantization_encoding
+        if quantization_encoding is None:
+            raise ValueError("quantization_encoding must not be None")
+        dtype = quantization_encoding.dtype
 
         # Determine cache dtype
-        cache_dtype_str = (
-            pipeline_config.model.kv_cache.kv_cache_dtype
-            or pipeline_config.dtype
-        )
-        cache_dtype = DType[cache_dtype_str]
+        cache_dtype = pipeline_config.model.kv_cache.cache_dtype
 
         # Construct KV cache parameters
         kv_params = cls.construct_kv_params(

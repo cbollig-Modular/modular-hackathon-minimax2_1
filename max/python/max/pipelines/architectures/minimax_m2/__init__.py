@@ -15,4 +15,7 @@
 
 from .arch import minimax_m2_arch
 
-__all__ = ["minimax_m2_arch"]
+# For --custom-architectures flag
+ARCHITECTURES = [minimax_m2_arch]
+
+__all__ = ["minimax_m2_arch", "ARCHITECTURES"]
