@@ -16,7 +16,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from collections.abc import Sequence
+from typing import Any, cast
 
 import numpy as np
 from max.driver import Buffer, Device
@@ -24,7 +25,7 @@ from max.dtype import DType
 from max.engine import InferenceSession, Model
 from max.graph import DeviceRef, Graph, TensorType
 from max.graph.weights import Weights, WeightsAdapter
-from max.nn.legacy.kv_cache import KVCacheInputs, KVCacheParams, PagedCacheValues
+from max.nn.legacy.kv_cache import KVCacheInputs, KVCacheInputsSequence, KVCacheParams, PagedCacheValues
 from max.nn.legacy.transformer import ReturnLogits
 from max.pipelines.core import TextContext
 from max.pipelines.lib import (
@@ -311,31 +312,115 @@ class MiniMaxM2Model(PipelineModel[TextContext], KVCacheMixin):
 
         return graph
 
-    def generate(
-        self,
-        context: TextContext,
-        inputs: ModelInputs,
-    ) -> ModelOutputs:
-        """Execute model inference.
+    def execute(self, model_inputs: ModelInputs) -> ModelOutputs:
+        """Execute the model with prepared inputs.
 
         Args:
-            context: Text generation context.
-            inputs: Model inputs.
+            model_inputs: Prepared model inputs.
 
         Returns:
             Model outputs containing logits.
         """
-        assert isinstance(inputs, MiniMaxM2Inputs)
+        model_inputs = cast(MiniMaxM2Inputs, model_inputs)
+        curr_kv_cache_inputs = model_inputs.kv_cache_inputs or ()
+
+        # Handle input_row_offsets conversion if needed
+        if isinstance(model_inputs.input_row_offsets, np.ndarray):
+            input_row_offsets = Buffer.from_numpy(model_inputs.input_row_offsets).to(
+                self.devices[0]
+            )
+        else:
+            input_row_offsets = model_inputs.input_row_offsets
 
         # Execute the model
-        outputs = self.model.execute(
-            inputs.tokens,
-            inputs.return_n_logits,
-            inputs.input_row_offsets,
-            *inputs.kv_cache_inputs.as_tuple(),
+        model_outputs = self.model.execute(
+            model_inputs.tokens,
+            model_inputs.return_n_logits,
+            input_row_offsets,
+            *curr_kv_cache_inputs,
         )
 
         # Extract logits from outputs
-        logits = outputs[0]
+        if len(model_outputs) == 3:
+            return ModelOutputs(
+                logits=cast(Buffer, model_outputs[1]),
+                next_token_logits=cast(Buffer, model_outputs[0]),
+                logit_offsets=cast(Buffer, model_outputs[2]),
+            )
+        else:
+            return ModelOutputs(
+                logits=cast(Buffer, model_outputs[0]),
+                next_token_logits=cast(Buffer, model_outputs[0]),
+            )
 
-        return ModelOutputs(logits=logits)
+    def prepare_initial_token_inputs(
+        self,
+        replica_batches: Sequence[Sequence[TextContext]],
+        kv_cache_inputs: KVCacheInputs | None = None,
+        return_n_logits: int = 1,
+    ) -> ModelInputs:
+        """Prepare inputs for the first execution pass.
+
+        Args:
+            replica_batches: Sequence of TextContext batches for each replica.
+            kv_cache_inputs: Optional KV cache inputs.
+            return_n_logits: Number of logits to return.
+
+        Returns:
+            Prepared ModelInputs for initial execution.
+        """
+        if len(replica_batches) > 1:
+            raise ValueError("Model does not support data parallelism > 1")
+
+        context_batch = replica_batches[0]
+        assert kv_cache_inputs is not None
+        kv_cache_inputs = cast(KVCacheInputsSequence, kv_cache_inputs)
+
+        # Get input_row_offsets: start and end position of each batch
+        input_row_offsets = np.cumsum(
+            [0] + [ctx.tokens.active_length for ctx in context_batch],
+            dtype=np.uint32,
+        )
+
+        # Create ragged token vector
+        tokens = np.concatenate([ctx.tokens.active for ctx in context_batch])
+
+        # Create input_row_offsets tensor
+        input_row_offsets_tensor = Buffer.from_numpy(input_row_offsets).to(
+            self.devices[0]
+        )
+
+        return MiniMaxM2Inputs(
+            tokens=Buffer.from_numpy(tokens).to(self.devices[0]),
+            input_row_offsets=input_row_offsets_tensor,
+            return_n_logits=Buffer.from_numpy(
+                np.array([return_n_logits], dtype=np.int64)
+            ),
+            kv_cache_inputs=kv_cache_inputs,
+        )
+
+    def prepare_next_token_inputs(
+        self, next_tokens: Buffer, prev_model_inputs: ModelInputs
+    ) -> ModelInputs:
+        """Prepare inputs for subsequent execution steps.
+
+        Args:
+            next_tokens: Token IDs generated in the previous step.
+            prev_model_inputs: ModelInputs from previous step.
+
+        Returns:
+            Prepared ModelInputs for next execution step.
+        """
+        prev_model_inputs = cast(MiniMaxM2Inputs, prev_model_inputs)
+        row_offsets_size = prev_model_inputs.input_row_offsets.shape[0]
+
+        next_row_offsets = self._input_row_offsets_prealloc[
+            :row_offsets_size
+        ].to(self.devices[0])
+
+        return MiniMaxM2Inputs(
+            tokens=next_tokens,
+            input_row_offsets=next_row_offsets,
+            return_n_logits=prev_model_inputs.return_n_logits,
+            kv_cache_inputs=prev_model_inputs.kv_cache_inputs,
+        )

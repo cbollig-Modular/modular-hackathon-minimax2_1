@@ -19,10 +19,10 @@ import functools
 
 from max.dtype import DType
 from max.graph import TensorValue, ops
-from max.nn.legacy.embedding import Embedding
+from max.nn.embedding import Embedding
 from max.nn.legacy.kv_cache import PagedCacheValues
 from max.nn.legacy.layer import LayerList, Module
-from max.nn.legacy.linear import Linear
+from max.nn.linear import Linear
 from max.nn.legacy.norm import RMSNorm
 from max.nn.legacy.rotary_embedding import Llama3RotaryEmbedding
 
@@ -131,10 +131,8 @@ class MiniMaxM2(Module):
 
         # Token embeddings
         self.embed_tokens = Embedding(
-            num_embeddings=config.vocab_size,
-            embedding_dim=config.hidden_size,
-            dtype=config.dtype,
-            device=config.devices[0],
+            config.vocab_size,
+            dim=config.hidden_size,
         )
 
         # Create RMSNorm factory function
@@ -183,9 +181,7 @@ class MiniMaxM2(Module):
         self.lm_head = Linear(
             in_dim=config.hidden_size,
             out_dim=config.vocab_size,
-            dtype=config.dtype,
-            device=config.devices[0],
-            has_bias=False,
+            bias=False,
         )
 
     def __call__(

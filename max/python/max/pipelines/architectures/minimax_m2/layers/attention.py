@@ -29,7 +29,7 @@ from max.nn.legacy.kernels import (
 )
 from max.nn.legacy.kv_cache import KVCacheParams, PagedCacheValues
 from max.nn.legacy.layer import Module
-from max.nn.legacy.linear import Linear
+from max.nn.linear import Linear
 from max.nn.legacy.norm import RMSNorm
 from max.nn.legacy.rotary_embedding import Llama3RotaryEmbedding
 
@@ -113,31 +113,24 @@ class MiniMaxM2Attention(Module):
         self.q_proj = linear_cls(
             in_dim=hidden_size,
             out_dim=self.q_weight_dim,
-            dtype=dtype,
-            device=devices[0],
-            has_bias=has_bias,
+            bias=has_bias,
         )
         self.k_proj = linear_cls(
             in_dim=hidden_size,
             out_dim=self.kv_weight_dim,
-            dtype=dtype,
-            device=devices[0],
-            has_bias=has_bias,
+            bias=has_bias,
         )
         self.v_proj = linear_cls(
             in_dim=hidden_size,
             out_dim=self.kv_weight_dim,
-            dtype=dtype,
-            device=devices[0],
-            has_bias=has_bias,
+            bias=has_bias,
         )
 
         # Output projection
         self.o_proj = linear_cls(
             in_dim=self.q_weight_dim,
             out_dim=hidden_size,
-            dtype=dtype,
-            device=devices[0],
+            bias=False,
         )
 
     @property
