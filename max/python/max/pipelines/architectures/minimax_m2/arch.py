@@ -43,7 +43,7 @@ minimax_m2_arch = SupportedArchitecture(
     tokenizer=TextTokenizer,
     context_type=TextContext,
     default_weights_format=WeightsFormat.safetensors,
-    multi_gpu_supported=False,  # Phase 1: single device only
+    multi_gpu_supported=True,
     rope_type=RopeType.normal,
     weight_adapters={
         WeightsFormat.safetensors: weight_adapters.convert_safetensor_state_dict,
