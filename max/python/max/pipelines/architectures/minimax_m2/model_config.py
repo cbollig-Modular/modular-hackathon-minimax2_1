@@ -140,15 +140,16 @@ class MiniMaxM2Config(ArchConfigWithKVCache):
         """
         return KVCacheParams(
             dtype=cache_dtype,
+            num_layers=huggingface_config.num_hidden_layers,
             n_kv_heads=huggingface_config.num_key_value_heads,
             head_dim=huggingface_config.head_dim,
-            num_layers=huggingface_config.num_hidden_layers,
             page_size=kv_cache_config.kv_cache_page_size,
             cache_strategy=kv_cache_config.cache_strategy,
+            enable_prefix_caching=kv_cache_config.enable_prefix_caching,
+            enable_kvcache_swapping_to_host=kv_cache_config.enable_kvcache_swapping_to_host,
+            host_kvcache_swap_space_gb=kv_cache_config.host_kvcache_swap_space_gb,
             devices=devices,
-            max_seq_len=huggingface_config.max_position_embeddings,
-            max_batch_size=kv_cache_config.kv_cache_max_batch_size,
-            is_continuous_batching=kv_cache_config.is_continuous_batching,
+            data_parallel_degree=pipeline_config.model.data_parallel_degree,
         )
 
     @override
