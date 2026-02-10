@@ -97,17 +97,17 @@ class MiniMaxM2Attention(Module):
                 " in MiniMaxM2Attention layer."
             )
 
-        # QK normalization layers
-        self.q_norm = RMSNorm(
-            self.kv_params.head_dim, DType.bfloat16, self.qk_norm_eps
-        )
-        self.k_norm = RMSNorm(
-            self.kv_params.head_dim, DType.bfloat16, self.qk_norm_eps
-        )
-
         # Compute projection dimensions
         self.q_weight_dim = self.kv_params.head_dim * num_attention_heads
         self.kv_weight_dim = self.kv_params.head_dim * num_key_value_heads
+
+        # QK normalization layers (for all heads combined)
+        self.q_norm = RMSNorm(
+            self.q_weight_dim, DType.bfloat16, self.qk_norm_eps
+        )
+        self.k_norm = RMSNorm(
+            self.kv_weight_dim, DType.bfloat16, self.qk_norm_eps
+        )
 
         # Q, K, V projections
         self.q_proj = linear_cls(

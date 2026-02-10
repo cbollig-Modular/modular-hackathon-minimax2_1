@@ -139,6 +139,7 @@ class MiniMaxM2(Module):
         create_norm = functools.partial(
             RMSNorm,
             config.hidden_size,
+            config.dtype,
             eps=config.rms_norm_eps,
         )
 
