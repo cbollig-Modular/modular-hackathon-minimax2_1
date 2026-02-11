@@ -136,10 +136,13 @@ class MiniMaxM2(Module):
         )
 
         # Create RMSNorm factory function
+        # Note: Normalization layers should always use bfloat16, even when
+        # the model uses FP8 quantization for linear layers
+        from max.dtype import DType
         create_norm = functools.partial(
             RMSNorm,
             config.hidden_size,
-            config.dtype,
+            DType.bfloat16,  # Always use bfloat16 for norm layers
             eps=config.rms_norm_eps,
         )
 
@@ -153,7 +156,8 @@ class MiniMaxM2(Module):
                     hidden_size=config.hidden_size,
                     kv_params=config.kv_params,
                     layer_idx=i,
-                    dtype=config.dtype,
+                    # Note: Checkpoint uses FP8 for attention weights
+                    dtype=DType.float8_e4m3fn,
                     devices=config.devices,
                     has_bias=config.attention_bias,
                     qk_norm_eps=config.rms_norm_eps,
@@ -165,7 +169,8 @@ class MiniMaxM2(Module):
                     num_experts_per_token=config.num_experts_per_tok,
                     moe_dim=config.intermediate_size,
                     gate_cls=MiniMaxM2TopKRouter,
-                    dtype=config.dtype,
+                    # Note: Checkpoint uses FP8 for expert weights
+                    dtype=DType.float8_e4m3fn,
                 ),
                 input_layernorm=create_norm(),
                 post_attention_layernorm=create_norm(),

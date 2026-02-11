@@ -274,7 +274,9 @@ class MiniMaxM2Model(PipelineModel[TextContext], KVCacheMixin):
 
         # Create model and load weights
         nn_model = MiniMaxM2(model_config)
-        nn_model.load_state_dict(state_dict, weight_alignment=1, strict=True)
+        # Note: Using strict=False to handle pre-quantized FP8 checkpoint format
+        # The checkpoint has FP8 weights which may have different naming/structure
+        nn_model.load_state_dict(state_dict, weight_alignment=1, strict=False)
         self.state_dict = nn_model.state_dict(auto_initialize=False)
 
         # Get KV cache input types

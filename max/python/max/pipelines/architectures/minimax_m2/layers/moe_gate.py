@@ -77,6 +77,15 @@ class MiniMaxM2TopKRouter(MoEGate):
         if correction_bias_dtype is None:
             correction_bias_dtype = DType.float32
 
+        # Note: The checkpoint has float32 gate weights, so we need to recreate
+        # the gate_score layer with float32 dtype instead of the model dtype
+        self.gate_score = linear_cls(
+            in_dim=hidden_dim,
+            out_dim=num_experts,
+            dtype=DType.float32,
+            device=devices[0],
+        )
+
         self.top_k = num_experts_per_token
         self.n_group = n_group
         self.topk_group = topk_group
